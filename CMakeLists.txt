@@ -20,9 +20,11 @@ FetchContent_Declare(
   GIT_TAG v3.7.0)
 FetchContent_MakeAvailable(toml11)
 
+add_subdirectory(third_party/HesaiLidar_General_SDK)
+
 # Add Executable
 add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE toml11::toml11)
+target_link_libraries(${PROJECT_NAME} PRIVATE toml11::toml11 PandarSDK tbb)
 
 # Add Custom Target
 add_custom_target(

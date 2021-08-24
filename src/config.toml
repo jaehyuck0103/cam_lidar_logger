@@ -1,3 +1,5 @@
+save_root = "/home/jae/save"
+
 [[lidars]]
 lidar_model = "Pandar64"
 dual_return_mode = true
