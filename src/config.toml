@@ -1,0 +1,8 @@
+[[lidars]]
+lidar_model = "Pandar64"
+dual_return_mode = true
+fps = 10
+start_azimuth = 0
+
+lidar_ip = "127.0.0.1"
+recv_port = 2368
