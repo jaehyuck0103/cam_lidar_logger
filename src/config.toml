@@ -1,4 +1,4 @@
-save_root = "/home/jae/save"
+save_root = "save"
 
 [[lidars]]
 lidar_model = "Pandar64"
