@@ -2,6 +2,8 @@
 #include "pandar/pandar_lidar_receiver.h"
 #include "pandar/pandar_utils.h"
 
+#include <fmt/chrono.h>
+#include <fmt/core.h>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/videoio.hpp>
 #include <tbb/concurrent_queue.h>
@@ -19,10 +21,20 @@ using LidarQueue =
     tbb::concurrent_bounded_queue<std::tuple<int, std::vector<uint8_t>, time_point<system_clock>>>;
 using namespace std::chrono_literals;
 
-void captureCamera(int cam_id, fs::path save_root) {
+std::string getFormattedTime(const time_point<system_clock> &tp) {
 
-    save_root /= ("cam0" + std::to_string(cam_id));
-    fs::create_directories(save_root);
+    std::string date = fmt::format("{:%y%m%d_%H%M%S}", tp);
+
+    const auto tse = tp.time_since_epoch();
+    const auto ms = chrono::duration_cast<chrono::milliseconds>(tse) -
+                    chrono::duration_cast<chrono::seconds>(tse);
+    const auto us = chrono::duration_cast<chrono::microseconds>(tse) -
+                    chrono::duration_cast<chrono::milliseconds>(tse);
+
+    return fmt::format("{:%y%m%d_%H%M%S}_{:03d}_{:03d}", tp, ms.count(), us.count());
+}
+
+void captureCamera(int cam_id, const fs::path &save_root) {
 
 #if 1
     std::string video_path = "videos/" + std::to_string(cam_id) + ".mkv";
@@ -32,29 +44,29 @@ void captureCamera(int cam_id, fs::path save_root) {
 #endif
 
     if (cap.isOpened()) {
-        std::cout << "cam" << cam_id << " open\n";
+        std::cout << fmt::format("Cam {:02d} open\n", cam_id);
     } else {
-        std::cout << "cam" << cam_id << " fail to open\n";
+        std::cout << fmt::format("Cam {:02d} fail to open\n", cam_id);
         return;
     }
 
-    cv::Mat abc;
-    while (cap.read(abc)) {
+    const fs::path cam_save_dir = save_root / fmt::format("cam{:02d}", cam_id);
+    fs::create_directories(cam_save_dir);
 
-        auto timestamp_us =
-            chrono::duration_cast<chrono::microseconds>(system_clock::now().time_since_epoch())
-                .count();
+    cv::Mat frame;
+    while (cap.read(frame)) {
 
-        const fs::path jpg_save_path = save_root / (std::to_string(timestamp_us) + ".jpg");
-        // std::cout << abc.cols << "\n";
-        cv::imwrite(jpg_save_path, abc, {cv::IMWRITE_JPEG_QUALITY, 100});
-        // std::this_thread::sleep_for(5ms);
+        const fs::path jpg_path =
+            cam_save_dir / fmt::format("{}.jpg", getFormattedTime(system_clock::now()));
+
+        cv::imwrite(jpg_path, frame, {cv::IMWRITE_JPEG_QUALITY, 100});
     }
 
-    std::cout << "cam" << cam_id << " exit\n";
+    std::cout << fmt::format("Cam {:02d} end\n", cam_id);
 }
 
 fs::path parseSaveRoot(std::string str_root) {
+
     // Expand Home Directory
     const std::string home_dir = std::getenv("HOME");
     if (str_root.rfind("~", 0) == 0) {
@@ -62,14 +74,8 @@ fs::path parseSaveRoot(std::string str_root) {
     }
 
     // Append subdirectory of current system time
-    std::time_t tt = system_clock::to_time_t(system_clock::now());
-    std::tm *ptm = std::localtime(&tt);
-
-    std::ostringstream oss;
-    oss << std::put_time(ptm, "%y%m%d_%H%M%S");
-
-    fs::path root{str_root};
-    root /= oss.str();
+    const fs::path root =
+        fs::path{str_root} / fmt::format("{:%y%m%d_%H%M%S}", system_clock::now());
 
     // Create directories
     fs::create_directories(root);
@@ -105,7 +111,7 @@ int main() {
 
         auto angle_corrections = PandarUtils::getFallbackAngleCorrection("Pandar64");
         if (!angle_corrections.has_value()) {
-            std::cout << "Fail to get Angle Correction" << std::endl;
+            std::cout << "Fail to get Angle Correction\n";
             std::abort();
         }
 
@@ -130,39 +136,29 @@ int main() {
 
     // Save PandarConfigs
     for (size_t lidar_id = 0; lidar_id < pandar_cfgs.size(); ++lidar_id) {
-        const fs::path json_save_path =
-            save_root / ("Lidar0" + std::to_string(lidar_id) + ".json");
+        const fs::path json_save_path = save_root / fmt::format("Lidar{:02d}.json", lidar_id);
         PandarUtils::writePandarConfigJson(json_save_path, pandar_cfgs[lidar_id]);
 
-        const fs::path lidar_save_dir = save_root / ("Lidar0" + std::to_string(lidar_id));
+        const fs::path lidar_save_dir = save_root / fmt::format("Lidar{:02d}", lidar_id);
         fs::create_directories(lidar_save_dir);
     }
 
-    // Launch camera threads
+    // Launch camera recv threads
     std::vector<std::thread> camera_threads;
     for (int cam_id = 0; cam_id < 8; ++cam_id) {
         camera_threads.emplace_back([=]() { captureCamera(cam_id, save_root); });
     }
-
-    /*
-    for (int cam_id = 0; cam_id < 8; ++cam_id) {
-        camera_threads[cam_id].join();
-    }
-    */
 
     // Lidar Receive Handling
     std::tuple<int, std::vector<uint8_t>, time_point<system_clock>> ret;
     while (true) {
         lidar_queue.pop(ret);
         const auto &[lidar_id, frame_buffer, timestamp] = ret;
-        auto timestamp_us =
-            std::chrono::duration_cast<std::chrono::microseconds>(timestamp.time_since_epoch())
-                .count();
 
-        const fs::path lidar_save_path = save_root / ("Lidar0" + std::to_string(lidar_id)) /
-                                         (std::to_string(timestamp_us) + ".fb");
+        const fs::path lidar_save_path = save_root / fmt::format("Lidar{:02d}", lidar_id) /
+                                         fmt::format("{}.fb", getFormattedTime(timestamp));
 
-        auto fp = std::fstream(lidar_save_path.string(), std::ios::out | std::ios::binary);
+        auto fp = std::fstream(lidar_save_path, std::ios::out | std::ios::binary);
         fp.write((char *)&frame_buffer[0], frame_buffer.size());
         fp.close();
     }

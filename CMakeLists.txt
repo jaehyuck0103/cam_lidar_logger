@@ -12,13 +12,21 @@ set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_VERBOSE_MAKEFILE true)
 
-# Fetch Contents
 include(FetchContent)
+
+# Fetch toml11
 FetchContent_Declare(
   toml11
   GIT_REPOSITORY https://github.com/ToruNiina/toml11.git
   GIT_TAG v3.7.0)
 FetchContent_MakeAvailable(toml11)
+
+# Fetch fmt
+FetchContent_Declare(
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+  GIT_TAG 8.0.1)
+FetchContent_MakeAvailable(fmt)
 
 find_package(OpenCV REQUIRED)
 
@@ -26,8 +34,8 @@ add_subdirectory(third_party/HesaiLidar_General_SDK)
 
 # Add Executable
 add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE toml11::toml11 PandarSDK tbb
-                                              ${OpenCV_LIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE toml11::toml11 fmt::fmt PandarSDK
+                                              tbb ${OpenCV_LIBS})
 
 # Add Custom Target
 add_custom_target(
