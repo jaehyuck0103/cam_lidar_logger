@@ -10,11 +10,17 @@
 #include <toml.hpp>
 
 #include <chrono>
-#include <filesystem>
 #include <iostream>
 #include <memory>
 
+#ifdef OLD_COMPILER
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+#include <filesystem>
 namespace fs = std::filesystem;
+#endif
+
 namespace chrono = std::chrono;
 using std::chrono::system_clock;
 using LidarQueue =

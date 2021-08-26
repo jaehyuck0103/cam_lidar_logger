@@ -13,7 +13,6 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_VERBOSE_MAKEFILE true)
 
 include(FetchContent)
-
 # Fetch toml11
 FetchContent_Declare(
   toml11
@@ -36,6 +35,10 @@ add_subdirectory(third_party/HesaiLidar_General_SDK)
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE toml11::toml11 fmt::fmt PandarSDK
                                               tbb ${OpenCV_LIBS})
+if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+  target_link_libraries(${PROJECT_NAME} PRIVATE stdc++fs)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE OLD_COMPILER)
+endif()
 
 # Add Custom Target
 add_custom_target(
